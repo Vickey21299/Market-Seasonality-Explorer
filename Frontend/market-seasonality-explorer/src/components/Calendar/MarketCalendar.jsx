@@ -147,6 +147,7 @@ const getVolatilityColor = (volatility) => {
 };
 
 export default function MarketCalendar({
+  selectedCrypto,
   marketDataMap,
   weeklyDataMap, // Receive the new weekly data map
   currentDate,
@@ -174,18 +175,37 @@ export default function MarketCalendar({
     else setCurrentDate(addMonths(currentDate, 1));
   };
 
-  const renderHeader = () => {
-    let title = '';
-    // Both monthly and weekly views now show the month title
-    if (view === 'monthly' || view === 'weekly') {
-      title = format(currentDate, 'MMMM yyyy');
-    } else {
-      title = format(currentDate, 'EEEE, MMMM d, yyyy');
-    }
+const renderHeader = () => {
+    // Logic to format the month and year from the currentDate prop
+    const title = new Intl.DateTimeFormat('en-US', {
+      year: 'numeric',
+      month: 'long',
+    }).format(currentDate);
+
     return (
       <div style={calendarStyles.header}>
+        {/* Previous month button */}
         <button onClick={handlePrev}>&lt; Prev</button>
-        <h2>{title}</h2>
+
+        <div style={{ textAlign: 'center' }}>
+          {/* Display the month and year */}
+          <h2>{title}</h2>
+
+          {/* Display the selected crypto image and name */}
+          {/* This block will only render if selectedCrypto is not null or undefined */}
+          {selectedCrypto && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginTop: '-10px' }}>
+              <img 
+                src={selectedCrypto.image} 
+                alt={`${selectedCrypto.label} logo`} 
+                style={{ width: '24px', height: '24px' }} 
+              />
+              <span style={{ fontWeight: '500' }}>{selectedCrypto.label}</span>
+            </div>
+          )}
+        </div>
+
+        {/* Next month button */}
         <button onClick={handleNext}>Next &gt;</button>
       </div>
     );
@@ -275,18 +295,33 @@ export default function MarketCalendar({
           const weekKey = format(weekStart, 'yyyy-MM-dd');
           const weekData = weeklyDataMap.get(weekKey);
           const perfStyle = weekData ? { color: weekData.performance >= 0 ? '#4caf50' : '#f44336' } : {};
-        
+          
           return (
-            <div key={weekKey} style={calendarStyles.weekSummaryCell}>
+            <div 
+              key={weekKey} 
+              style={calendarStyles.weekSummaryCell}
+              onClick={() => {
+                setSelectedDate(weekStart);
+              }}
+            >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={calendarStyles.dayNumber}>Week of {format(weekStart, 'MMM d')}</span>
-                {weekData && (<span style={{ fontSize: '1.2rem', fontWeight: 'bold', ...perfStyle }}>{weekData.performance.toFixed(2)}%</span>)}
+                <span style={calendarStyles.dayNumber}>
+                  Week of {format(weekStart, 'MMM d')}
+                </span>
+                {weekData && (
+                  <span style={{ fontSize: '1.2rem', fontWeight: 'bold', ...perfStyle }}>
+                    {weekData.performance >= 0 ? '▲' : '▼'} {Math.abs(weekData.performance).toFixed(2)}%
+                  </span>
+                )}
               </div>
               {weekData ? (
                 <div style={{ ...calendarStyles.dayData, display: 'flex', justifyContent: 'space-around', marginTop: '1rem' }}>
                   <span><strong>H:</strong> ${weekData.high.toFixed(2)}</span>
                   <span><strong>L:</strong> ${weekData.low.toFixed(2)}</span>
-                  <span><strong>Vol:</strong> {(weekData.volume / 1000000).toFixed(2)}M</span>
+                  <span><strong>Vol:</strong> {(weekData.volume / 1e6).toFixed(1)}M</span>
+                  {weekData.avgVolatility !== undefined && (
+                    <span><strong>Vol%:</strong> {weekData.avgVolatility.toFixed(2)}%</span>
+                  )}
                 </div>
               ) : (
                 <p style={{ textAlign: 'center', marginTop: '1rem' }}>No trading data for this week</p>
@@ -317,7 +352,7 @@ export default function MarketCalendar({
         <button onClick={() => setView('monthly')} style={{ ...calendarStyles.button, ...(view === 'monthly' && calendarStyles.activeButton) }}>Monthly</button>
       </div>
 
-      {view !== 'daily' && renderHeader()}
+      {renderHeader()}
 
       {view === 'monthly' && renderMonthlyView()}
       {view === 'weekly' && renderWeeklyView()}

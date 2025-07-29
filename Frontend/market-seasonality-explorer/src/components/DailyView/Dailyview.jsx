@@ -1,12 +1,24 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Line, Bar } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, Filler } from 'chart.js';
+import zoomPlugin from 'chartjs-plugin-zoom';
 import { fetchIntradayData } from '../../api/binanceIntradayService.js';
 import { processIntradayData } from '../../utils/dailyViewUtils.js';
 import { format, addDays, subDays } from 'date-fns';
 
-// Register Chart.js components
-ChartJS.register( CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, Filler );
+// Register Chart.js components including zoom
+ChartJS.register(
+  CategoryScale, 
+  LinearScale, 
+  PointElement, 
+  LineElement, 
+  BarElement, 
+  Title, 
+  Tooltip, 
+  Legend, 
+  Filler,
+  zoomPlugin
+);
 
 const viewStyles = {
   container: { padding: '1rem' },
@@ -15,7 +27,20 @@ const viewStyles = {
   statsContainer: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '1rem' },
   statBox: { backgroundColor: '#2a2a2a', padding: '1rem', borderRadius: '8px' },
   statLabel: { color: '#a0a0a0', fontSize: '14px' },
-  statValue: { fontSize: '20px', fontWeight: 'bold' }
+  statValue: { fontSize: '20px', fontWeight: 'bold' },
+  resetZoomButton: {
+    padding: '4px 8px',
+    backgroundColor: '#555',
+    color: 'white',
+    border: 'none',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    fontSize: '12px',
+    marginBottom: '8px',
+    '&:hover': {
+      backgroundColor: '#666'
+    }
+  }
 };
 
 const PerformanceDisplay = ({ value, dollarValue }) => {
@@ -29,6 +54,8 @@ export default function DailyView({ selectedDate , setSelectedDate }) {
   const [dailyData, setDailyData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const priceChartRef = useRef(null);
+  const volumeChartRef = useRef(null);
 
   // ADD navigation handlers
   const handlePrevDay = () => {
@@ -73,15 +100,52 @@ export default function DailyView({ selectedDate , setSelectedDate }) {
     };
   }, [dailyData]);
 
+  const handleResetZoom = () => {
+    if (priceChartRef.current) {
+      priceChartRef.current.resetZoom();
+    }
+    if (volumeChartRef.current) {
+      volumeChartRef.current.resetZoom();
+    }
+  };
+
+  const chartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      zoom: {
+        pan: {
+          enabled: true,
+          mode: 'x',
+        },
+        zoom: {
+          wheel: {
+            enabled: true,
+          },
+          pinch: {
+            enabled: true,
+          },
+          mode: 'x',
+        },
+        limits: {
+          x: {min: 'original', max: 'original'},
+        }
+      }
+    },
+    scales: {
+      x: { ticks: { color: '#a0a0a0' }},
+      y: { ticks: { color: '#a0a0a0' }}
+    }
+  };
+
   if (isLoading) return <div>Loading Intraday Data...</div>;
   if (error) return <div style={{ color: '#f44336' }}>Error: {error}</div>;
-//   If no data is available, loadData again load first then render message
+  //   If no data is available, loadData again load first then render message
     if (!dailyData || dailyData.charts.labels.length === 0) {
     return <div>No intraday data available for this day.</div>;
     }
 //   if (!dailyData) return <div>No intraday data available for this day.</div>;
-  
-  const chartOptions = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { ticks: { color: '#a0a0a0' }}, y: { ticks: { color: '#a0a0a0' }}}};
   
   return (
     <div style={viewStyles.container}>
@@ -107,11 +171,17 @@ export default function DailyView({ selectedDate , setSelectedDate }) {
         </div>
       </div>
 
+      <div style={{display: 'flex', justifyContent: 'flex-end', marginBottom: '8px'}}>
+        <button onClick={handleResetZoom} style={viewStyles.resetZoomButton}>
+          Reset Zoom
+        </button>
+      </div>
+
       <div style={{ ...viewStyles.chartContainer, marginTop: '2rem' }}>
-        <Line options={chartOptions} data={chartData.price} />
+        <Line ref={priceChartRef} options={chartOptions} data={chartData.price} />
       </div>
       <div style={viewStyles.chartContainer}>
-        <Bar options={chartOptions} data={chartData.volume} />
+        <Bar ref={volumeChartRef} options={chartOptions} data={chartData.volume} />
       </div>
     </div>
   );

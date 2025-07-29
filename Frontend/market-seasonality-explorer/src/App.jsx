@@ -6,8 +6,10 @@ import { fetchKlineData } from './api/binance.js';
 import { transformDataForCalendar, createWeeklyDataMap } from './utils/dataTransformer.js';
 import MarketCalendar from './components/Calendar/MarketCalendar.jsx';
 import DashboardPanel from './components/Dashboard/DashboardPanel.jsx';
-import { startOfMonth, endOfMonth , subDays } from 'date-fns';
+import Header from './components/Header.jsx';
+import { startOfMonth, startOfDay, endOfMonth , subDays ,addDays } from 'date-fns';
 import Split from 'react-split'; 
+import Select from 'react-select'; // If you want to use a styled select component
 const appStyles = {
   fullScreen: {
     display: 'flex',
@@ -81,7 +83,34 @@ const Footer = () => (
     <p>Data provided by Binance API. Past performance does not guarantee future results.</p>
   </footer>
 );
-
+const cryptoOptions = [
+  { value: 'BTCUSDT', label: 'Bitcoin (BTC)', image: 'https://s2.coinmarketcap.com/static/img/coins/64x64/1.png' },
+  { value: 'ETHUSDT', label: 'Ethereum (ETH)', image: 'https://s2.coinmarketcap.com/static/img/coins/64x64/1027.png' },
+  { value: 'SOLUSDT', label: 'Solana (SOL)', image: 'https://s2.coinmarketcap.com/static/img/coins/64x64/5426.png' },
+  { value: 'BNBUSDT', label: 'Binance Coin (BNB)', image: 'https://s2.coinmarketcap.com/static/img/coins/64x64/1839.png' },
+  { value: 'XRPUSDT', label: 'Ripple (XRP)', image: 'https://s2.coinmarketcap.com/static/img/coins/64x64/52.png' },
+];
+// 3. Custom styles to make react-select match your dark theme
+const customSelectStyles = {
+  control: (styles) => ({ ...styles, backgroundColor: '#333', border: '1px solid #555' }),
+  singleValue: (styles) => ({ ...styles, color: 'white' }),
+  menu: (styles) => ({ ...styles, backgroundColor: '#333' }),
+  option: (styles, { isFocused, isSelected }) => ({
+    ...styles,
+    backgroundColor: isSelected ? '#64b5f6' : isFocused ? '#555' : '#333',
+    color: 'white',
+    ':active': {
+      backgroundColor: '#64b5f6',
+    },
+  }),
+};
+// 4. A custom function to format how each option looks
+const formatOptionLabel = ({ label, image }) => (
+  <div style={{ display: 'flex', alignItems: 'center' }}>
+    <img src={image} alt={label} style={{ width: 20, height: 20, marginRight: 10 }} />
+    <span>{label}</span>
+  </div>
+);
 export default function App() {
   const [marketDataMap, setMarketDataMap] = useState(new Map());
   // NEW: State for weekly aggregated data
@@ -94,6 +123,10 @@ export default function App() {
   const [symbol, setSymbol] = useState(
     () => localStorage.getItem('selectedSymbol') || 'BTCUSDT'
   );
+   const [dateRange, setDateRange] = useState({
+    from: startOfDay(subDays(new Date(), 7)),
+    to: startOfDay(new Date()),
+  });
 
   const getMonthData = useCallback(async (date) => {
     try {
@@ -117,11 +150,19 @@ export default function App() {
     }
   }, [symbol]);
 
-  const handleSymbolChange = (event) => {
-    const newSymbol = event.target.value;
+ const handleSymbolChange = (selectedOption) => {
+    const newSymbol = selectedOption.value;
     setSymbol(newSymbol);
     localStorage.setItem('selectedSymbol', newSymbol);
   };
+  // ADD THIS NEW useEffect
+  useEffect(() => {
+    // This effect syncs the dashboard's date range when the calendar month changes.
+    const newRangeStart = startOfDay(startOfMonth(currentDate));
+    const newRangeEnd = addDays(newRangeStart, 6); // Set to the first 7 days of the new month
+    
+    setDateRange({ from: newRangeStart, to: newRangeEnd });
+  }, [currentDate]); // This runs whenever the main calendar date changes
 
   useEffect(() => {
     getMonthData(currentDate);
@@ -130,31 +171,31 @@ export default function App() {
   if (error) {
     return <div style={appStyles.error}>Error: {error}</div>;
   }
-
+ const selctedcrypto = cryptoOptions.find(option => option.value === symbol);
   return (
     <div style={appStyles.fullScreen}>
       <header style={appStyles.header}>
+        <Header />
         <h1>Market Seasonality Explorer</h1>
         <div style={appStyles.headerControls}>
           <label htmlFor="symbol-select">Crypto Asset:</label>
-          <select 
+          {/* 6. Replace the old <select> with the new <Select> component */}
+          <Select
             id="symbol-select"
-            value={symbol} 
+            value={cryptoOptions.find(option => option.value === symbol)}
             onChange={handleSymbolChange}
-            style={appStyles.select}
-          >
-            <option value="BTCUSDT">Bitcoin (BTC)</option>
-            <option value="ETHUSDT">Ethereum (ETH)</option>
-            <option value="SOLUSDT">Solana (SOL)</option>
-            <option value="BNBUSDT">Binance Coin (BNB)</option>
-            <option value="XRPUSDT">Ripple (XRP)</option>
-          </select>
+            options={cryptoOptions}
+            styles={customSelectStyles}
+            formatOptionLabel={formatOptionLabel}
+            instanceId="symbol-select"
+          />
         </div>
       </header>
 
       <div style={appStyles.contentSplit}>
         <main style={appStyles.calendarSection}>
           <MarketCalendar
+            selectedCrypto={selctedcrypto} // Pass the selected crypto option
             marketDataMap={marketDataMap}
             weeklyDataMap={weeklyDataMap} // Pass the new map down
             currentDate={currentDate}
@@ -167,10 +208,9 @@ export default function App() {
         </main>
         <aside style={appStyles.dashboardSection}>
           <DashboardPanel 
-            selectedDate={selectedDate}
+            dateRange={dateRange}
+            setDateRange={setDateRange}
             marketDataMap={marketDataMap}
-            weeklyDataMap={weeklyDataMap} // Also pass to dashboard for later
-            view={view}
           />
         </aside>
       </div>

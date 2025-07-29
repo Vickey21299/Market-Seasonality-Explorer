@@ -4,9 +4,21 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Line, Bar } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, Filler } from 'chart.js';
 import { calculateDashboardMetrics } from '../../utils/dashboardUtils.js';
-import { startOfDay } from 'date-fns';
+import {format } from 'date-fns';
+import zoomPlugin from 'chartjs-plugin-zoom';
 
-ChartJS.register( CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, Filler );
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler,
+  zoomPlugin
+);
 
 const panelStyles = {
   container: { backgroundColor: '#1e1e1e', color: 'white', padding: '1.5rem', borderRadius: '8px', height: '100%' },
@@ -16,6 +28,46 @@ const panelStyles = {
   metricLabel: { color: '#a0a0a0', fontSize: '12px', marginBottom: '4px' },
   metricValue: { fontWeight: '600' },
   chartContainer: { marginBottom: '2rem' },
+  dateInputGroup: {
+    display: 'flex',
+    gap: '10px',
+    alignItems: 'center'
+  },
+  dateInput: {
+    padding: '8px',
+    backgroundColor: '#333',
+    color: 'white',
+    border: '1px solid #555',
+    borderRadius: '4px',
+    fontSize: '14px',
+    cursor: 'pointer',
+    '&:invalid': {
+      borderColor: '#f44336'
+    }
+  },
+  dateLabel: {
+    fontSize: '12px',
+    color: '#a0a0a0',
+    marginBottom: '4px'
+  },
+  dateError: {
+    color: '#f44336',
+    fontSize: '12px',
+    marginTop: '4px'
+  },
+  resetZoomButton: {
+    padding: '4px 8px',
+    backgroundColor: '#555',
+    color: 'white',
+    border: 'none',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    fontSize: '12px',
+    marginBottom: '8px',
+    '&:hover': {
+      backgroundColor: '#666'
+    }
+  }
 };
 
 const PerformanceDisplay = ({ value, dollarValue }) => {
@@ -29,22 +81,76 @@ const PerformanceDisplay = ({ value, dollarValue }) => {
   );
 };
 
-export default function DashboardPanel({ selectedDate, marketDataMap }) {
+const DateRangeSelector = ({ dateRange, handleDateChange, dateError }) => (
+  <div style={{display: 'flex', flexDirection: 'column', gap: '4px'}}>
+    <div style={panelStyles.dateInputGroup}>
+      <div>
+        <div style={panelStyles.dateLabel}>From</div>
+        <input 
+          type="date" 
+          name="from"
+          value={format(dateRange.from, 'yyyy-MM-dd')}
+          max={format(dateRange.to, 'yyyy-MM-dd')}
+          onChange={handleDateChange}
+          style={panelStyles.dateInput}
+          required
+        />
+      </div>
+      <div>
+        <div style={panelStyles.dateLabel}>To</div>
+        <input 
+          type="date"
+          name="to"
+          value={format(dateRange.to, 'yyyy-MM-dd')}
+          min={format(dateRange.from, 'yyyy-MM-dd')}
+          onChange={handleDateChange}
+          style={panelStyles.dateInput}
+          required
+        />
+      </div>
+    </div>
+    {dateError && <div style={panelStyles.dateError}>{dateError}</div>}
+  </div>
+);
+
+export default function DashboardPanel({ dateRange, setDateRange, marketDataMap }) {
   const [dashboardData, setDashboardData] = useState(null);
   const priceChartRef = useRef(null);
   const volumeChartRef = useRef(null);
+  const [dateError, setDateError] = useState('');
 
   useEffect(() => {
-    if (selectedDate && marketDataMap.size > 0) {
-      const endDate = startOfDay(selectedDate);
-      const startDate = new Date(endDate);
-      startDate.setDate(endDate.getDate() - 6);
-      const data = calculateDashboardMetrics(startDate, endDate, marketDataMap);
+    // Re-calculate metrics when the dateRange prop changes
+    if (dateRange?.from && dateRange?.to && marketDataMap.size > 0) {
+      const data = calculateDashboardMetrics(dateRange.from, dateRange.to, marketDataMap);
       setDashboardData(data);
-    } else{
-      setDashboardData(null);
     }
-  }, [selectedDate, marketDataMap]);
+  }, [dateRange, marketDataMap]);
+   // Handler for the date input fields
+  const handleDateChange = (e) => {
+    const { name, value } = e.target;
+    const newDate = new Date(value + 'T00:00:00');
+    
+    // Validate date selection
+    if (name === 'from') {
+      if (newDate > dateRange.to) {
+        setDateError('Start date cannot be after end date');
+        return;
+      }
+    } else if (name === 'to') {
+      if (newDate < dateRange.from) {
+        setDateError('End date cannot be before start date');
+        return;
+      }
+    }
+    
+    setDateError(''); // Clear any existing error
+    setDateRange(prevRange => ({
+      ...prevRange,
+      [name]: newDate
+    }));
+  };
+
   
   const chartData = useMemo(() => {
     if (!dashboardData) return { price: { datasets: [] }, volume: { datasets: [] } };
@@ -101,9 +207,21 @@ export default function DashboardPanel({ selectedDate, marketDataMap }) {
   }, [dashboardData]);
 
   if (!dashboardData) {
-    return <div style={panelStyles.container}><h2 style={panelStyles.header}>Dashboard</h2><p>Select a date to view summary.</p></div>;
+    return (
+      <div style={panelStyles.container}>
+        <div style={{ ...panelStyles.header, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' }}>
+          <h2 style={{margin: 0}}>Dashboard</h2>
+          <DateRangeSelector 
+            dateRange={dateRange}
+            handleDateChange={handleDateChange}
+            dateError={dateError}
+          />
+        </div>
+        <p>Select a date range to view summary.</p>
+      </div>
+    );
   }
-  
+
   const { header, stats } = dashboardData;
   // CORRECTED: Removed `as const` from the chart options
   const chartOptions = {
@@ -118,6 +236,24 @@ export default function DashboardPanel({ selectedDate, marketDataMap }) {
         position: 'top',
         labels: {
           color: '#a0a0a0',
+        }
+      },
+      zoom: {
+        pan: {
+          enabled: true,
+          mode: 'x',
+        },
+        zoom: {
+          wheel: {
+            enabled: true,
+          },
+          pinch: {
+            enabled: true,
+          },
+          mode: 'x',
+        },
+        limits: {
+          x: {min: 'original', max: 'original'},
         }
       }
     },
@@ -163,15 +299,36 @@ export default function DashboardPanel({ selectedDate, marketDataMap }) {
     }
   };
 
+  const handleResetZoom = () => {
+    if (priceChartRef.current) {
+      priceChartRef.current.resetZoom();
+    }
+    if (volumeChartRef.current) {
+      volumeChartRef.current.resetZoom();
+    }
+  };
+
   return (
     <div style={panelStyles.container}>
+      <div style={{ ...panelStyles.header, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' }}>
+        <h2 style={{margin: 0}}>Dashboard</h2>
+        <DateRangeSelector 
+          dateRange={dateRange}
+          handleDateChange={handleDateChange}
+          dateError={dateError}
+        />
+      </div>
       <h2 style={panelStyles.header}>{header}</h2>
-
+      <div style={{display: 'flex', justifyContent: 'flex-end'}}>
+        <button onClick={handleResetZoom} style={panelStyles.resetZoomButton}>
+          Reset Zoom
+        </button>
+      </div>
       <div style={{...panelStyles.chartContainer, height: '250px'}}>
-        <Line  options={chartOptions} data={chartData.price} />
+        <Line ref={priceChartRef} options={chartOptions} data={chartData.price} />
       </div>
       <div style={{...panelStyles.chartContainer, height: '100px'}}>
-        <Bar options={volumeChartOptions} data={chartData.volume} />
+        <Bar ref={volumeChartRef} options={volumeChartOptions} data={chartData.volume} />
       </div>
 
       <div style={panelStyles.metricGroup}>

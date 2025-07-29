@@ -56,6 +56,8 @@ export const createWeeklyDataMap = (dailyDataMap) => {
         low: Infinity,
         volume: 0,
         dataPoints: [],
+        volatilities: [], // NEW: Array to track daily volatilities
+        avgVolatility: 0  // NEW: Will store the average volatility
       });
     }
 
@@ -64,6 +66,7 @@ export const createWeeklyDataMap = (dailyDataMap) => {
     weekSummary.low = Math.min(weekSummary.low, dayData.low);
     weekSummary.volume += dayData.volume;
     weekSummary.dataPoints.push(dayData);
+    weekSummary.volatilities.push(dayData.volatility); // NEW: Store daily volatility
   }
 
   for (const weekSummary of weeklyMap.values()) {
@@ -77,7 +80,13 @@ export const createWeeklyDataMap = (dailyDataMap) => {
       weekSummary.close = close;
       weekSummary.performance = ((close - open) / open) * 100;
       
+      // NEW: Calculate average volatility
+      const totalVolatility = weekSummary.volatilities.reduce((sum, v) => sum + v, 0);
+      weekSummary.avgVolatility = totalVolatility / weekSummary.volatilities.length;
+      
+      // Cleanup temporary arrays
       delete weekSummary.dataPoints;
+      delete weekSummary.volatilities;
     }
   }
 
