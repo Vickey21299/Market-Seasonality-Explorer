@@ -26,7 +26,7 @@ The **Market Seasonality Explorer** is a web application built with React for vi
 * **Build Tool**: Vite
 * **Charting**: Chart.js with `react-chartjs-2`
 * **Date Management**: `date-fns`
-* **UI Layout**: `react-split`
+* **UI Layout**: `Material Ui` , `react-split`
 * **Data Source**: Binance Public API
 
 ---
