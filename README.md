@@ -37,7 +37,7 @@ The **Market Seasonality Explorer** is a web application built with React for vi
 
 1.  **Clone the repository:**
     ```bash
-    git clone (https://github.com/Vickey21299/Market-Seasonality-Explorer.git)
+    git clone https://github.com/Vickey21299/Market-Seasonality-Explorer.git
     ```
 
 2.  **Navigate to the project directory:**
